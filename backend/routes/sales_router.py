@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Optional
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta
 
 from backend.database.db import get_db
 from backend.models.models import Sales, SalesItems, Items
