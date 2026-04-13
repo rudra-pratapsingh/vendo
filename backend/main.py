@@ -4,6 +4,7 @@ import logging
 
 from backend.routes.stock_router import router as stock_router
 from backend.routes.sales_router import router as sales_router
+from backend.routes.summary_router import router as summary_router
 
 from backend.database.db import create_tables
 
@@ -11,9 +12,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
-    title="Stock Management API",
+    title="ORM Operation API",
     version="1.0.0",
-    description="API for testing stock-related operations (CRUD, updates, low-stock detection)."
+    description="ORM operations with summary generation"
 )
 
 app.add_middleware(
@@ -32,12 +33,17 @@ def startup_event():
 
 app.include_router(stock_router)
 app.include_router(sales_router)
+app.include_router(summary_router)
 
 @app.get("/")
 def root():
     return {
         "message": "Stock Management and Sales API is running.",
-        "endpoints": ["/stock", "/stock/low", "/stock/update", "/sales", "/sales/add"]
+        "endpoints": [
+            "/stock", "/stock/low", "/stock/update", 
+            "/sales", "/sales/add",
+            "/summary", "/summary/daily"
+        ]
     }
 
 @app.get("/health")

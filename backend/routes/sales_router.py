@@ -81,11 +81,14 @@ def add_sale(request: AddSaleRequest, db: Session = Depends(get_db)):
     sale_items_response = []
 
     for item in request.items:
-      db_item = db.query(Items).filter(Items.id==item.item_id).first()
+      db_item = db.query(Items).filter(
+        Items.id==item.item_id,
+        Items.user_id==request.user_id
+      ).first()
       if not db_item:
         raise HTTPException(status_code=404, detail=f"Item {item.item_id} not found")
 
-      if int(db_item.current_stock) < item.quantity:
+      if db_item.current_stock < item.quantity:
         raise HTTPException(
           status_code=400,
           detail="Insufficient stock"
@@ -125,11 +128,14 @@ def add_sale(request: AddSaleRequest, db: Session = Depends(get_db)):
     "items": sale_items_response
     }
   
+  except HTTPException as e:
+    db.rollback()
+    raise
+
   except Exception as e:
+    db.rollback()
     logger.error(f"Sale was not added successful {str(e)}")
     raise HTTPException(
       status_code = 500,
       detail = f"An error occured while adding the sale {str(e)}"
     )
-      
-    
