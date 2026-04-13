@@ -29,9 +29,8 @@ def get_all_sales(
       query = query.filter(Sales.created_at >= start_dt)
 
     if end_date:
-        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
-        end_dt = end_dt + timedelta(days=1) - timedelta(seconds=1)
-        query = query.filter(Sales.created_at <= end_dt)
+      end_dt = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
+      query = query.filter(Sales.created_at < end_dt)
 
     sales = query.order_by(Sales.created_at.desc()).all()
 
@@ -62,13 +61,29 @@ def get_all_sales(
     logger.error(f"Sales were not retrieved successfully {str(e)}")
     raise HTTPException(
       status_code = 500,
-      detail = f"An error occured while retrieving the sales {str(e)}"
+      detail = "An error occured while retrieving the sales"
     )
 
   
 @router.post('/add', response_model=SaleResponse)
 def add_sale(request: AddSaleRequest, db: Session = Depends(get_db)):
   try:
+    if not request.items:
+      raise HTTPException(status_code=400, detail="Sale must contain at least one item")
+
+    seen_items = set()
+    for item in request.items:
+      if item.item_id in seen_items:
+        raise HTTPException(status_code=400, detail="Duplicate items in sale not allowed")
+      
+      seen_items.add(item.item_id)
+
+      if item.quantity <= 0:
+        raise HTTPException(status_code=400, detail="Quantity must be greater than 0")
+
+      if item.unit_price < 0:
+        raise HTTPException(status_code=400, detail="Unit price cannot be negative")
+
     sale = Sales(
       user_id = request.user_id,
       total_amount = 0
@@ -80,11 +95,14 @@ def add_sale(request: AddSaleRequest, db: Session = Depends(get_db)):
     total_amount = 0
     sale_items_response = []
 
+    validated_items = []
+
     for item in request.items:
       db_item = db.query(Items).filter(
         Items.id==item.item_id,
         Items.user_id==request.user_id
       ).first()
+
       if not db_item:
         raise HTTPException(status_code=404, detail=f"Item {item.item_id} not found")
 
@@ -94,6 +112,10 @@ def add_sale(request: AddSaleRequest, db: Session = Depends(get_db)):
           detail="Insufficient stock"
         )
       
+      validated_items.append((item, db_item))
+
+    for item, db_item in validated_items:
+
       line_total = item.quantity * item.unit_price
       total_amount += line_total
 
@@ -137,5 +159,5 @@ def add_sale(request: AddSaleRequest, db: Session = Depends(get_db)):
     logger.error(f"Sale was not added successful {str(e)}")
     raise HTTPException(
       status_code = 500,
-      detail = f"An error occured while adding the sale {str(e)}"
+      detail = "Internal server error"
     )

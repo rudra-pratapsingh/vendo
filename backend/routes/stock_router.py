@@ -35,11 +35,11 @@ def get_all_stock(user_id: int, db: Session = Depends(get_db)):
     logger.error(f"Error while fetching stock {str(e)}")
     raise HTTPException(
       status_code = 500,
-      detail = f"An error occured while fetching stock: {str(e)}"
+      detail = "An error occured while fetching stock"
     )
   
 @router.get('/low', response_model=LowStockItems)
-def get_low_stock(user_id: int, threshold: int, db: Session = Depends(get_db)):
+def get_low_stock(user_id: int, threshold: int = 5, db: Session = Depends(get_db)):
   try:
     low_stock: List[Items] = db.query(Items).filter(Items.user_id == user_id).filter(Items.current_stock <= threshold).all()
     low_stock_items: List[ItemStock] = [
@@ -61,16 +61,26 @@ def get_low_stock(user_id: int, threshold: int, db: Session = Depends(get_db)):
     logger.error(f"Error while fetching low stock {str(e)}")
     raise HTTPException(
       status_code = 500,
-      detail = f"An error occured while fetching low stock items {str(e)}"
+      detail = "An error occured while fetching low stock items"
     )
 
 @router.patch('/update', response_model=UpdatedStockInfo)
 def update_stock(request: UpdateStock, db: Session = Depends(get_db)):
   try:
-    item = db.query(Items).filter(Items.id == request.item_id).first()
+    item = db.query(Items).filter(
+      Items.id == request.item_id,
+      Items.user_id == request.user_id
+    ).first()
+
     if not item:
       raise HTTPException(status_code=404, detail="Item not found")
     
+    if request.new_stock == 0:
+      raise HTTPException(status_code=400, detail="Stock update cannot be zero")
+
+    if item.current_stock + request.new_stock < 0:
+      raise HTTPException(status_code=400, detail="Stock cannot go negative")
+
     item.current_stock = item.current_stock + request.new_stock
 
     db.commit()
@@ -85,9 +95,14 @@ def update_stock(request: UpdateStock, db: Session = Depends(get_db)):
       current_stock=item.current_stock
     )
   
+  except HTTPException as e:
+    db.rollback()
+    raise
+
   except Exception as e:
+    db.rollback()
     logger.error(f"Stock update was not successful {str(e)}")
     raise HTTPException(
       status_code = 500,
-      detail = f"An error occured while updating the stock {str(e)}"
+      detail = "An error occured while updating the stock"
     )
